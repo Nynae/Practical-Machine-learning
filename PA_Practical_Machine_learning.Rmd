@@ -1,0 +1,66 @@
+---
+title: "PA_Machine Learning"
+output: html_document
+---
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+```{r load packages, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+library(caret)
+library(ggplot2)
+library(AppliedPredictiveModeling)
+library(e1071)
+```
+Variable selection
+
+In this project I try to predict the "Classe" for the training set. I chose to remove all variables that had missing values because the variables that had missing values all had a very large  number. I removed these variables from both my training and testing datasets, I also removed user names and timestamps because these variables are not inherent to the momevement we are trying to predict.
+
+```{r load data}
+testing<-read.csv("D:/03. Opleiding/Coursera/8_Practical Machine Learning/Practical_Machine_learning/pml-testing.csv", header=TRUE, sep=",",na.strings=c("","NA","#DIV/0!"))
+training<-read.csv("D:/03. Opleiding/Coursera/8_Practical Machine Learning/Practical_Machine_learning/pml-training.csv",header=TRUE,sep=",",na.strings=c("","NA","#DIV/0!"))
+#remove all columns with more than 25% missing values
+trainingNoMiss<-training[, colSums(is.na(training))<14716]
+trainingNoMiss<-trainingNoMiss[,c(-1:-7)]
+inTrain<-createDataPartition(y=trainingNoMiss$classe, p=0.7,list=FALSE)
+trainingNoMiss<-trainingNoMiss[inTrain,]
+validation<-trainingNoMiss[-inTrain,]
+testingNoMiss<-testing[,colSums(is.na(training))<1]
+testingNoMiss<-testingNoMiss[,c(-1:-7)]
+```
+ Model selection - Classification tree
+ 
+ I chose to split the training set into a training and validation set. This because the testing set did not contain the classe variable that we are trying to predict. Hence I would not have a method to validate the performance of my model.
+ 
+ I chose to first perform a  classification tree because this is an easily interpretable method.I started with a model without cross validation but the results were not acceptable. I then added cv and came to an accuracy of 0.48 which is still unacceptably low. adding tuneLength=30 (increasing the depth of the tree)
+ allowed accuracy to increase to 0.84 with specificity of at least 0.95 for all classe variables. 
+```{r classification tree, message=FALSE, warning=FALSE}
+library(rattle)
+cvCtrl<-trainControl(method="repeatedcv", repeats=3, summaryFunction = multiClassSummary, classProbs = TRUE) #set multiclasssummary because there are more than two classes.
+
+#model with tunelength added 
+modFit<-train(classe~.,method="rpart",tuneLength=30, trControl= cvCtrl,data=trainingNoMiss)
+predtree<-predict(modFit$finalModel, newdata=validation, type="class")
+confusionMatrix(predtree, validation$classe)
+
+
+```
+The below visualisation of the classification tree shows the model might be a bit overidmensional. However it does perform better than it's cousin with less depth.
+
+```{r visualisatie, message=FALSE, warning=FALSE}
+fancyRpartPlot(modFit$finalModel)
+```
+ 
+ Model selection - SVM
+ The use of an SVM allowed for a much higher accurary as well as a higher specificity than the classification tree. Because both specificity and accuracy are high when extrapolating the model to the validation set I expect the out of sample error to be similar to the in sample error. Unfortunately it's not possible to easily visualise the outcome of the SVM because of the many variables taken along in the analysis.
+
+```{r SVM, message=FALSE, warning=FALSE}
+modelsvm<-svm(classe~., data=trainingNoMiss)
+pred<-predict(modelsvm, validation)
+confusionMatrix(pred,validation$classe)
+PredTest<-predict(modelsvm,testingNoMiss)
+
+```
+
+Conclusion
+The support vector machine in this case works best on the data without the use of cross validation. Because both specificity and sensititivy are high when extrapolating the model to the validation set I expect the out of sample error to be similar to the in sample error.
+
